@@ -19,10 +19,27 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Cache Android SDK components
+        id: sdk-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            /usr/local/lib/android/sdk/platforms/android-34
+            /usr/local/lib/android/sdk/build-tools/34.0.0
+          key: android-sdk-platform-34-bt-34.0.0
+
       - name: Install Android SDK components
+        if: steps.sdk-cache.outputs.cache-hit != 'true'
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
             "platforms;android-34" "build-tools;34.0.0" >/dev/null
+
+      - name: Cache ZXing jar
+        id: zxing-cache
+        uses: actions/cache@v4
+        with:
+          path: libs/zxing-core.jar
+          key: zxing-core-3.5.3
 
       - name: Build signed APK (R8)
         run: |
