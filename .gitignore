@@ -1,0 +1,7 @@
+build/
+toolchain/
+libs/
+ZCodeWeb.apk
+release.keystore
+*.log
+__pycache__/

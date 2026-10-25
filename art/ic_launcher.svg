@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192">
+  <!-- ZCode Web 图标 v2：地球 = 网页容器 -->
+  <rect width="192" height="192" rx="42" fill="#2563eb"/>
+  <circle cx="96" cy="96" r="52" fill="none" stroke="#ffffff" stroke-width="10"/>
+  <ellipse cx="96" cy="96" rx="22" ry="52" fill="none" stroke="#ffffff" stroke-width="8"/>
+  <path d="M 48 78 H 144 M 48 114 H 144" stroke="#ffffff" stroke-width="8" stroke-linecap="round"/>
+  <!-- 底部小指示点：代表「打开的页面」 -->
+  <circle cx="96" cy="168" r="6" fill="#ffffff" opacity="0.9"/>
+</svg>
