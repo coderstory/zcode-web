@@ -18,6 +18,14 @@ KEY_PASS="${KEY_PASS:-android}"
 ALIAS="${ALIAS:-zcode}"
 VERSION="${VERSION:-1.0}"
 
+# aapt2/zipalign：优先 build-tools 内二进制（CI），回落 PATH（Termux 包）
+AAPT2="$(command -v aapt2 || true)"
+ZIPALIGN="$(command -v zipalign || true)"
+[ -x "$BT/aapt2" ] && AAPT2="$BT/aapt2"
+[ -x "$BT/zipalign" ] && ZIPALIGN="$BT/zipalign"
+[ -n "$AAPT2" ] || { echo "ERROR: aapt2 未找到" >&2; exit 1; }
+[ -n "$ZIPALIGN" ] || { echo "ERROR: zipalign 未找到" >&2; exit 1; }
+
 cd "$(dirname "$0")"
 rm -rf build && mkdir -p build/classes build/dex
 
@@ -28,8 +36,8 @@ if [ ! -f "$ZX" ]; then mkdir -p libs
 fi
 
 echo "== 1. aapt2 (compile res + link) =="
-aapt2 compile --dir res -o build/res.zip
-aapt2 link --manifest AndroidManifest.xml -I "$AJ" build/res.zip \
+"$AAPT2" compile --dir res -o build/res.zip
+"$AAPT2" link --manifest AndroidManifest.xml -I "$AJ" build/res.zip \
   --min-sdk-version 24 --target-sdk-version 34 --version-code 3 --version-name "$VERSION" \
   -o build/app.unsigned.apk
 
@@ -51,7 +59,7 @@ echo "== 4. 打包 classes.dex =="
 (cd build/dex && zip -q ../app.unsigned.apk classes.dex)
 
 echo "== 5. zipalign =="
-zipalign -f 4 build/app.unsigned.apk build/app.aligned.apk
+"$ZIPALIGN" -f 4 build/app.unsigned.apk build/app.aligned.apk
 
 echo "== 6. keystore + sign =="
 if [ ! -f "$KS" ]; then
