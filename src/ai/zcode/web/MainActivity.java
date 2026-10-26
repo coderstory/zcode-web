@@ -245,10 +245,16 @@ public class MainActivity extends Activity {
         s.setSupportZoom(true);
         s.setBuiltInZoomControls(true);
         s.setDisplayZoomControls(false);
-        s.setMediaPlaybackRequiresUserGesture(false);
+        s.setMediaPlaybackRequiresUserGesture(true);   // 禁止无手势自动播视频吃 CPU/GPU
         s.setMixedContentMode(android.webkit.WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
         s.setAllowFileAccess(true);
         s.setAllowContentAccess(true);
+
+        // 渲染器降级：WebView 不可见时主动让出 GPU/CPU（API 26+）
+        if (android.os.Build.VERSION.SDK_INT >= 26) {
+            webView.setRendererPriorityPolicy(
+                    android.webkit.WebView.RENDERER_PRIORITY_IMPORTANT, true);
+        }
 
         // ---- 缓存策略：正常走 HTTP 缓存；加载失败时回退强制读缓存（离线可用）----
         s.setCacheMode(android.webkit.WebSettings.LOAD_DEFAULT);
@@ -730,7 +736,14 @@ public class MainActivity extends Activity {
         super.onPause();
         // Cookie 立即落盘，保证状态恢复
         android.webkit.CookieManager.getInstance().flush();
-        if (webWrap.getVisibility() != View.VISIBLE) stopCamera();
+        if (webWrap.getVisibility() == View.VISIBLE) {
+            // 后台冻结网页：停渲染 + 全局暂停 JS 定时器/动画
+            webView.onPause();
+            webView.pauseTimers();
+            log("webview frozen (background)");
+        } else {
+            stopCamera();
+        }
     }
 
     @Override
@@ -745,6 +758,11 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         log("onResume: scanView=" + (scanView.getVisibility() == View.VISIBLE));
+        if (webWrap.getVisibility() == View.VISIBLE) {
+            webView.onResume();
+            webView.resumeTimers();
+            log("webview resumed");
+        }
         if (scanView.getVisibility() == View.VISIBLE
                 && cameraDevice == null
                 && checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
