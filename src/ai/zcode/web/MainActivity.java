@@ -84,7 +84,7 @@ public class MainActivity extends Activity {
     // 浏览界面
     private WebView webView;
     private ProgressBar progressBar;
-    private LinearLayout webWrap;
+    private FrameLayout webWrap;
     private boolean cacheFallback = false;
 
     @Override
@@ -218,12 +218,31 @@ public class MainActivity extends Activity {
         progressBar.setMax(100);
         progressBar.setVisibility(View.GONE);
 
-        webWrap = new LinearLayout(this);
-        webWrap.setOrientation(LinearLayout.VERTICAL);
-        webWrap.setVisibility(View.GONE);   // 初始隐藏：否则返回键永远误判在网页态
-        webWrap.addView(progressBar);
-        webWrap.addView(webView, new LinearLayout.LayoutParams(
+        // 网页容器：FrameLayout（进度条+WebView+悬浮菜单钮）
+        LinearLayout webColumn = new LinearLayout(this);
+        webColumn.setOrientation(LinearLayout.VERTICAL);
+        webColumn.addView(progressBar);
+        webColumn.addView(webView, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT));
+
+        webWrap = new FrameLayout(this);
+        webWrap.setVisibility(View.GONE);   // 初始隐藏：否则返回键永远误判在网页态
+        webWrap.addView(webColumn, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        android.widget.TextView menuBtn = new android.widget.TextView(this);
+        menuBtn.setText("☰");
+        menuBtn.setTextColor(0xE6E8F1FF);
+        menuBtn.setTextSize(18);
+        menuBtn.setGravity(Gravity.CENTER);
+        menuBtn.setBackground(roundRect(0x660B1626, dp(22), dp(1), 0x33FFFFFF));
+        FrameLayout.LayoutParams menuLp = new FrameLayout.LayoutParams(dp(44), dp(44),
+                Gravity.BOTTOM | Gravity.END);
+        menuLp.rightMargin = dp(14);
+        menuLp.bottomMargin = dp(20);
+        menuBtn.setLayoutParams(menuLp);
+        menuBtn.setOnClickListener(v -> showWebMenu());
+        webWrap.addView(menuBtn, menuLp);
 
         FrameLayout root = new FrameLayout(this);
         root.addView(scanView, new FrameLayout.LayoutParams(
@@ -308,8 +327,40 @@ public class MainActivity extends Activity {
         });
     }
 
+    private static final String DESKTOP_UA =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+    private static final String KEY_DESKTOP_HOSTS = "desktop_hosts";
+
+    private String hostOf(String url) {
+        try {
+            return new java.net.URI(url).getHost() != null
+                    ? new java.net.URI(url).getHost() : url;
+        } catch (Exception e) { return url; }
+    }
+
+    private boolean isDesktopMode(String url) {
+        return getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getStringSet(KEY_DESKTOP_HOSTS, new java.util.HashSet<>())
+                .contains(hostOf(url));
+    }
+
+    private void setDesktopMode(String url, boolean desktop) {
+        java.util.Set<String> s = new java.util.HashSet<>(
+                getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                        .getStringSet(KEY_DESKTOP_HOSTS, new java.util.HashSet<>()));
+        if (desktop) s.add(hostOf(url)); else s.remove(hostOf(url));
+        getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit().putStringSet(KEY_DESKTOP_HOSTS, s).apply();
+    }
+
+    /** 按当前站点模式应用 UA（桌面=Chrome PC UA，移动=系统默认） */
+    private void applyUa(String url) {
+        webView.getSettings().setUserAgentString(
+                isDesktopMode(url) ? DESKTOP_UA : null);
+    }
+
     private void openUrl(String url) {
-        log("openUrl: " + url);
+        log("openUrl: " + url + " desktop=" + isDesktopMode(url));
         getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 .edit().putString(KEY_URL, url).apply();
         scanView.setVisibility(View.GONE);
@@ -317,6 +368,7 @@ public class MainActivity extends Activity {
         webView.setVisibility(View.VISIBLE);
         stopCamera();
         cacheFallback = false;
+        applyUa(url);
         webView.loadUrl(url);
     }
 
@@ -340,6 +392,49 @@ public class MainActivity extends Activity {
             return;
         }
         super.onBackPressed();
+    }
+
+    /** 网页内悬浮菜单：刷新 / 桌面版切换 / 返回扫码 */
+    private void showWebMenu() {
+        String current = webView.getUrl() != null ? webView.getUrl() : "";
+        boolean desktop = isDesktopMode(current);
+
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(10), dp(6), dp(10), dp(6));
+
+        box.addView(menuItem("刷新页面", () -> webView.reload()),
+                new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(46)));
+        box.addView(menuItem(desktop ? "切换为移动版" : "切换为桌面版（PC 布局）", () -> {
+                    setDesktopMode(current, !desktop);
+                    applyUa(current);
+                    webView.reload();
+                }),
+                new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(46)));
+        box.addView(menuItem("返回扫码页", this::backToScanner),
+                new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(46)));
+
+        android.app.AlertDialog d = new android.app.AlertDialog.Builder(this).create();
+        d.setView(box);
+        d.show();
+        if (d.getWindow() != null) {
+            d.getWindow().setBackgroundDrawable(roundRect(0xF2131C30, dp(18), dp(1), 0x1AFFFFFF));
+            d.getWindow().setLayout(dp(240), ViewGroup.LayoutParams.WRAP_CONTENT);
+        }
+    }
+
+    private android.widget.Button menuItem(String label, Runnable action) {
+        android.widget.Button b = new android.widget.Button(this);
+        b.setText(label);
+        b.setTextColor(0xFFE8F1FF);
+        b.setTextSize(15);
+        b.setAllCaps(false);
+        b.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+        b.setStateListAnimator(null);
+        b.setBackground(null);
+        b.setPadding(dp(14), 0, dp(14), 0);
+        b.setOnClickListener(v -> action.run());
+        return b;
     }
 
     /** 统一样式确认弹窗：深色圆角卡片 + 渐变主按钮 + 描边次按钮 */
