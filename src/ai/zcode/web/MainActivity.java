@@ -236,11 +236,9 @@ public class MainActivity extends Activity {
         menuBtn.setTextSize(18);
         menuBtn.setGravity(Gravity.CENTER);
         menuBtn.setBackground(roundRect(0x660B1626, dp(22), dp(1), 0x33FFFFFF));
-        FrameLayout.LayoutParams menuLp = new FrameLayout.LayoutParams(dp(44), dp(44),
-                Gravity.BOTTOM | Gravity.END);
-        menuLp.rightMargin = dp(14);
-        menuLp.bottomMargin = dp(20);
+        FrameLayout.LayoutParams menuLp = new FrameLayout.LayoutParams(dp(44), dp(44));
         menuBtn.setLayoutParams(menuLp);
+        setupDraggableFab(menuBtn, menuLp);
         menuBtn.setOnClickListener(v -> showWebMenu());
         webWrap.addView(menuBtn, menuLp);
 
@@ -392,6 +390,83 @@ public class MainActivity extends Activity {
             return;
         }
         super.onBackPressed();
+    }
+
+    /** 悬浮球：可拖动，松手吸附左右边缘，位置持久化；位移小于阈值视为点击 */
+    private void setupDraggableFab(View fab, FrameLayout.LayoutParams lp) {
+        final int[] down = new int[2];
+        final float[] downRaw = new float[2];
+        final boolean[] dragged = {false};
+
+        // 恢复上次位置（默认右下角）
+        android.graphics.Point saved = readFabPos();
+        if (saved != null) {
+            fab.post(() -> {
+                int maxX = Math.max(0, webWrap.getWidth() - fab.getWidth());
+                int maxY = Math.max(0, webWrap.getHeight() - fab.getHeight());
+                lp.leftMargin = Math.min(saved.x, maxX);
+                lp.topMargin = Math.min(saved.y, maxY);
+                fab.setLayoutParams(lp);
+            });
+        } else {
+            fab.post(() -> {
+                lp.leftMargin = Math.max(0, webWrap.getWidth() - fab.getWidth() - dp(14));
+                lp.topMargin = Math.max(0, webWrap.getHeight() - fab.getHeight() - dp(20));
+                fab.setLayoutParams(lp);
+            });
+        }
+
+        fab.setOnTouchListener((v, ev) -> {
+            switch (ev.getActionMasked()) {
+                case android.view.MotionEvent.ACTION_DOWN:
+                    down[0] = lp.leftMargin;
+                    down[1] = lp.topMargin;
+                    downRaw[0] = ev.getRawX();
+                    downRaw[1] = ev.getRawY();
+                    dragged[0] = false;
+                    return true;   // 自己消费， onClick 由松手判定后手动触发
+                case android.view.MotionEvent.ACTION_MOVE: {
+                    float dx = ev.getRawX() - downRaw[0];
+                    float dy = ev.getRawY() - downRaw[1];
+                    if (!dragged[0] && Math.hypot(dx, dy) < dp(6)) return true;
+                    dragged[0] = true;
+                    int maxX = Math.max(0, webWrap.getWidth() - fab.getWidth());
+                    int maxY = Math.max(0, webWrap.getHeight() - fab.getHeight());
+                    lp.leftMargin = Math.max(0, Math.min((int) (down[0] + dx), maxX));
+                    lp.topMargin = Math.max(0, Math.min((int) (down[1] + dy), maxY));
+                    fab.setLayoutParams(lp);
+                    return true;
+                }
+                case android.view.MotionEvent.ACTION_UP: {
+                    if (!dragged[0]) {
+                        v.performClick();          // 原地点击 → 菜单
+                        return true;
+                    }
+                    // 吸附最近边缘（x 动画省略：直接落位）
+                    int centerX = lp.leftMargin + fab.getWidth() / 2;
+                    boolean toLeft = centerX < webWrap.getWidth() / 2f;
+                    lp.leftMargin = toLeft ? dp(10)
+                            : Math.max(0, webWrap.getWidth() - fab.getWidth() - dp(10));
+                    fab.setLayoutParams(lp);
+                    saveFabPos(lp.leftMargin, lp.topMargin);
+                    return true;
+                }
+                default:
+                    return false;
+            }
+        });
+    }
+
+    private void saveFabPos(int x, int y) {
+        getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putInt("fab_x", x).putInt("fab_y", y).apply();
+    }
+
+    private android.graphics.Point readFabPos() {
+        android.content.SharedPreferences p =
+                getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        if (!p.contains("fab_x")) return null;
+        return new android.graphics.Point(p.getInt("fab_x", 0), p.getInt("fab_y", 0));
     }
 
     /** 网页内悬浮菜单：刷新 / 桌面版切换 / 返回扫码 */
