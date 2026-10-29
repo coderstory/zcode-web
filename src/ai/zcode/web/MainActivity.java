@@ -555,7 +555,7 @@ public class MainActivity extends Activity {
         return new android.graphics.Point(p.getInt("fab_x", 0), p.getInt("fab_y", 0));
     }
 
-    /** 网页内悬浮菜单：刷新 / 桌面版切换 / 返回扫码 */
+    /** 网页内悬浮菜单：刷新 / 最近打开 / 桌面版切换 / 返回扫码（点击任意项自动收起） */
     private void showWebMenu() {
         String current = webView.getUrl() != null ? webView.getUrl() : "";
         boolean desktop = isDesktopMode(current);
@@ -564,26 +564,33 @@ public class MainActivity extends Activity {
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(dp(10), dp(6), dp(10), dp(6));
 
-        box.addView(menuItem("刷新页面", () -> webView.reload()),
+        box.addView(menuItem("刷新页面", () -> { dismissWebMenu(); webView.reload(); }),
                 new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(46)));
         box.addView(menuItem(desktop ? "切换为移动版" : "切换为桌面版（PC 布局）", () -> {
+                    dismissWebMenu();
                     setDesktopMode(current, !desktop);
                     applyUa(current);
                     webView.reload();
                 }),
                 new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(46)));
-        box.addView(menuItem("最近打开的地址", this::showHistory),
+        box.addView(menuItem("最近打开的地址", () -> { dismissWebMenu(); showHistory(); }),
                 new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(46)));
-        box.addView(menuItem("返回扫码页", this::backToScanner),
+        box.addView(menuItem("返回扫码页", () -> { dismissWebMenu(); backToScanner(); }),
                 new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(46)));
 
-        android.app.AlertDialog d = new android.app.AlertDialog.Builder(this).create();
-        d.setView(box);
-        d.show();
-        if (d.getWindow() != null) {
-            d.getWindow().setBackgroundDrawable(roundRect(0xF2131C30, dp(18), dp(1), 0x1AFFFFFF));
-            d.getWindow().setLayout(dp(240), ViewGroup.LayoutParams.WRAP_CONTENT);
+        webMenuDialog = new android.app.AlertDialog.Builder(this).create();
+        webMenuDialog.setView(box);
+        webMenuDialog.show();
+        if (webMenuDialog.getWindow() != null) {
+            webMenuDialog.getWindow().setBackgroundDrawable(roundRect(0xF2131C30, dp(18), dp(1), 0x1AFFFFFF));
+            webMenuDialog.getWindow().setLayout(dp(240), ViewGroup.LayoutParams.WRAP_CONTENT);
         }
+    }
+
+    private android.app.AlertDialog webMenuDialog;
+
+    private void dismissWebMenu() {
+        if (webMenuDialog != null) { webMenuDialog.dismiss(); webMenuDialog = null; }
     }
 
     private android.widget.Button menuItem(String label, Runnable action) {
