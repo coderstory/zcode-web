@@ -357,8 +357,94 @@ public class MainActivity extends Activity {
                 isDesktopMode(url) ? DESKTOP_UA : null);
     }
 
+    private static final String KEY_HISTORY = "history";
+
+    /** 记录打开历史：去重置顶，最多 10 条 */
+    private void recordHistory(String url) {
+        java.util.ArrayDeque<String> q = new java.util.ArrayDeque<>();
+        for (String u : getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getString(KEY_HISTORY, "").split("\n")) {
+            if (!u.isEmpty()) q.add(u);
+        }
+        q.remove(url);          // 去重
+        q.addFirst(url);        // 置顶
+        StringBuilder sb = new StringBuilder();
+        int i = 0;
+        for (String u : q) {
+            if (i++ >= 10) break;
+            if (sb.length() > 0) sb.append('\n');
+            sb.append(u);
+        }
+        getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .edit().putString(KEY_HISTORY, sb.toString()).apply();
+    }
+
+    private java.util.List<String> readHistory() {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        for (String u : getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getString(KEY_HISTORY, "").split("\n")) {
+            if (!u.isEmpty()) out.add(u);
+        }
+        return out;
+    }
+
+    private android.app.AlertDialog historyDialog;
+
+    /** 历史记录弹窗：最近 10 个地址，点击打开 */
+    private void showHistory() {
+        java.util.List<String> items = readHistory();
+        if (items.isEmpty()) {
+            toast("暂无打开记录");
+            return;
+        }
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(10), dp(8), dp(10), dp(8));
+
+        TextView head = new TextView(this);
+        head.setText("最近打开（新 → 旧）");
+        head.setTextColor(0xFF9DB2D9);
+        head.setTextSize(12);
+        LinearLayout.LayoutParams headLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        headLp.topMargin = dp(4);
+        box.addView(head, headLp);
+
+        for (String url : items) {
+            TextView row = new TextView(this);
+            row.setText(url);
+            row.setTextColor(0xFFE8F1FF);
+            row.setTextSize(14);
+            row.setSingleLine(true);
+            row.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
+            row.setPadding(dp(14), 0, dp(14), 0);
+            row.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+            row.setBackground(roundRect(0xFF1A2438, dp(10), 0, 0));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, dp(44));
+            lp.topMargin = dp(4);
+            row.setOnClickListener(v -> {
+                if (historyDialog != null) historyDialog.dismiss();
+                openUrl(url);
+            });
+            box.addView(row, lp);
+        }
+
+        historyDialog = new android.app.AlertDialog.Builder(this).create();
+        historyDialog.setView(box);
+        historyDialog.show();
+        if (historyDialog.getWindow() != null) {
+            historyDialog.getWindow().setBackgroundDrawable(
+                    roundRect(0xF2131C30, dp(18), dp(1), 0x1AFFFFFF));
+            historyDialog.getWindow().setLayout(
+                    (int) (getResources().getDisplayMetrics().widthPixels * 0.86f),
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
+        }
+    }
+
     private void openUrl(String url) {
         log("openUrl: " + url + " desktop=" + isDesktopMode(url));
+        recordHistory(url);
         getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                 .edit().putString(KEY_URL, url).apply();
         scanView.setVisibility(View.GONE);
@@ -485,6 +571,8 @@ public class MainActivity extends Activity {
                     applyUa(current);
                     webView.reload();
                 }),
+                new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(46)));
+        box.addView(menuItem("最近打开的地址", this::showHistory),
                 new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(46)));
         box.addView(menuItem("返回扫码页", this::backToScanner),
                 new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(46)));
